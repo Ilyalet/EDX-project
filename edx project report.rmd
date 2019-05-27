@@ -1,0 +1,131 @@
+---
+title: "Predcit Heart disease"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+#Introduction:
+Several health conditions, your lifestyle, and your age and family history can increase your risk for heart disease. These are called risk factors. About half of all Americans (47%) have at least one of the three key risk factors for heart disease: high blood pressure, high cholesterol, and smoking (1).
+Some of the risk factors for heart disease cannot be controlled, such as your age or family history. But you can take steps to lower your risk by changing the factors you can control.
+1. https://www.cdc.gov/heartdisease/risk_factors.htm
+
+Goal:
+Build a machine learning model that can predict heart disease given several data point of a new patient. 
+
+Data:
+14 attributes of 303 patients with each patient having a goal field that refers to the presence (or lack of) heart disease.  
+Source: https://www.kaggle.com/ronitf/heart-disease-uci
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Analysis
+I loaded the .csv data file then changed the coulmn names to clearer ones.
+
+
+```{r, include=FALSE, echo=FALSE}
+
+library(tidyverse)
+library(caret)
+library(ggplot2)
+library(corrplot)
+library(ggplot2)
+
+#Load Data
+hdata=read.csv("heart.csv")
+head(hdata)
+#give clear names for columns
+name <- c("age","sex","chest_pain","resting_blood_pressure","cholesterol","fasting_bloodsugar","rest_ecg","max_heartrate","exercise_induced_angina","st_depression","st_slope","n_major_vasel","thalassemia","target")
+names(hdata) <- name
+hdata<-na.omit(object = hdata)
+```
+
+To be able to generate the model I created the test and train data sets.The training set will contain random 80% of the database samples (rows) and in accordance test will be 20% of the data.
+
+```{r, echo=FALSE}
+# Create Training And Test Data
+
+set.seed(1)
+test_index <- createDataPartition(y = hdata$age, times = 1, p = 0.2, list = FALSE)
+train_set <- hdata[-test_index,]
+test_set <- hdata[test_index,]
+test_set <- test_set[-1,]
+```
+
+To start undesranding the data first I created an graph that will show the corelation between all the parameters and heart disease. We can see that some paramteres are postivly correlated such as chest pain and max heart rate and some are negativly such as exercise induced angina and ST depression.
+
+```{r}
+M<-cor(hdata)
+corrplot(M, method="circle")
+```
+
+
+I employed the Principal component analysis (PCA) technique. It might allow to reduce the number of parameters (dimensons) and bring out strong patterns in the dataset. 
+
+
+```{r}
+#Principal Component Analysis
+
+hdata.pca <- prcomp(hdata[ , 1:13], center = TRUE, scale. = TRUE)
+pc_df<-data.frame(hdata.pca$x)
+summary(hdata.pca)
+df.tidy <- cbind(pc_df,data.frame(target = as.factor(hdata$target))) %>%
+  gather(key = "component", value = 'value', 1:13 )
+
+#Vizualize the pca  
+
+ggplot(df.tidy, aes(x = value, fill = target)) + 
+  geom_histogram(binwidth=0.4) + 
+  facet_wrap(~component)
+```
+
+
+In this graph we see that several componenets contribute the most to the vraiblity.
+
+I will use a screeplot to determine the number of factors to retain.
+
+
+```{r}
+screeplot(hdata.pca, type = "l", npcs = 15, main = "Screeplot of the first 10 PCs")
+abline(h = 1, col="red", lty=5)
+legend("topright", legend=c("Eigenvalue = 1"),
+       col=c("red"), lty=5, cex=0.6)
+cumpro <- cumsum(hdata.pca$sdev^2 / sum(hdata.pca$sdev^2))
+plot(cumpro[0:15], xlab = "PC #", ylab = "Amount of explained variance", main = "Cumulative variance plot")
+abline(v = 5, col="blue", lty=5)
+abline(h = 0.6, col="blue", lty=5)
+legend("topleft", legend=c("Cut-off @ PC6"),
+       col=c("blue"), lty=5, cex=0.6)
+
+```
+
+
+We notice that the first 5 componenets have an Eigenvalue > 1 and explain about 60% of the varaince. 
+Altough it would be possible to reduce the number of dimenions I would not do it since the domention number and the row number is not that high and it possible to use all of them. (The PCA was also a good practice)
+
+To create a machine learning algorithm I will use logistic regression since this will allow the classification into the 2 groups.
+The algorithm will parctice on 80% of the data.
+
+
+```{r}
+fit_glm <- glm(target~.,family=binomial(),data=train_set)
+summary(fit_glm)
+p_glm <- predict(fit_glm,test_set)
+
+#calculation of accuracy for the model
+
+mean(as.numeric(p_glm>=0)==test_set$target)
+
+```
+
+
+#Result
+I created a machine learning model that can predict the prognosis for a new unknow patient with an accuracy of 84%. In the model summary we can see that some coefficients are more significant
+
+
+#Conclusion
+It is possible to use classification models to create machine learning algorith based on the given data using the glm() function.
+
